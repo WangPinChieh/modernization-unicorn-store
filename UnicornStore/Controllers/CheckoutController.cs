@@ -1,12 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Amazon;
+using Amazon.EventBridge;
+using Amazon.EventBridge.Model;
+using Amazon.Runtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using UnicornStore.Components;
 using UnicornStore.Models;
 
 namespace UnicornStore.Controllers
@@ -70,6 +77,25 @@ namespace UnicornStore.Controllers
 
                     // Save all changes
                     await dbContext.SaveChangesAsync(requestAborted);
+                    var amazonEventBridgeClient = new AmazonEventBridgeClient(new BasicAWSCredentials("access key id", "access secret key"), RegionEndpoint.USEast2);
+                    await amazonEventBridgeClient.PutEventsAsync(new PutEventsRequest
+                    {
+                        Entries = new List<PutEventsRequestEntry>
+                        {
+                            new PutEventsRequestEntry
+                            {
+                                DetailType = "OrderCreated",
+                                EventBusName = "unicorn-store",
+                                Source = "unicorn-store/storefront",
+                                Detail = JsonSerializer.Serialize(new OrderCreated
+                                {
+                                    OrderId = order.OrderId,
+                                    OrderDate = order.OrderDate,
+                                    Total = order.Total
+                                })
+                            }
+                        }
+                    });
 
                     _logger.LogInformation("User {userName} started checkout of {orderId}.", order.Username, order.OrderId);
 
